@@ -1,0 +1,47 @@
+name: Deploy to AWS EC2 / Lightsail
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 Starting automated deployment..."
+            
+            # Navigate to project repository on server
+            cd /home/ubuntu/green-corridore
+
+            # Pull latest changes from main branch
+            git pull origin main
+
+            # Install backend production dependencies
+            echo "📦 Updating backend dependencies..."
+            cd backend
+            npm install --omit=dev
+
+            # Install frontend dependencies and build production bundle
+            echo "⚡ Building frontend distribution..."
+            cd ../frontend
+            npm install
+            npm run build
+
+            # Return to root and restart backend server via PM2 with ecosystem config
+            echo "🔄 Restarting application with PM2..."
+            cd /home/ubuntu/green-corridore
+            pm2 reload ecosystem.config.cjs || pm2 start ecosystem.config.cjs
+
+            echo "✅ Deployment completed successfully!"
